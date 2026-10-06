@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Saint North Gym</title>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&display=swap" rel="stylesheet">
+
+<!-- Tailwind via CDN (needs internet), customised with the Black / Red / Steel / White palette -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = { theme: { extend: {
+    colors: { obsidian:'#0B0B0C', steel:'#1C1C20', edge:'#2A2A30', edge2:'#383842', crimson:'#E11D48', alum:'#9CA3AF' },
+    fontFamily: { display: ['Oswald', 'Impact', 'Arial Narrow', 'sans-serif'] }
+  } } };
+</script>
+<style type="text/tailwindcss">
+  @layer components {
+    .panel  { @apply border border-edge bg-steel p-4; }
+    .field  { @apply min-h-[48px] w-full border border-edge2 bg-obsidian px-3 text-base text-white placeholder:text-gray-600; }
+    .label  { @apply mb-1 mt-3 block text-xs font-bold uppercase tracking-widest text-alum; }
+    .btn    { @apply min-h-[48px] border border-crimson bg-crimson px-4 font-display text-base font-bold uppercase tracking-wider text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40; }
+    .btn-steel  { @apply border-edge2 bg-edge text-white hover:bg-edge2; }
+    .btn-danger { @apply border-red-500 bg-transparent text-red-400 hover:bg-red-600 hover:text-white; }
+    .badge  { @apply shrink-0 whitespace-nowrap px-2 py-0.5 text-xs font-bold tracking-widest; }
+    .pill   { @apply min-h-[42px] shrink-0 border border-edge2 bg-steel px-4 font-display text-sm uppercase tracking-wider text-alum; }
+    .pill.on{ @apply border-crimson bg-crimson text-white; }
+  }
+</style>
+</head>
+
+<body class="bg-obsidian font-sans text-white antialiased">
+
+<!-- ===== Login: dashboard stays hidden until authenticated ===== -->
+<section id="login" class="mx-auto mt-[7vh] max-w-sm px-3">
+  <form id="login-form" class="panel border-t-4 !border-t-crimson" autocomplete="off">
+    <h1 class="font-display text-3xl font-bold uppercase tracking-wider">Saint North <span class="text-crimson">Gym</span></h1>
+    <p class="text-xs uppercase tracking-widest text-alum">Staff terminal · Calios, Santa Cruz, Laguna</p>
+    <label class="label" for="u">Username</label><input id="u" class="field" required>
+    <label class="label" for="p">Password</label><input id="p" type="password" class="field" required>
+    <button class="btn mt-4 w-full" type="submit">Log in</button>
+    <div id="login-msg"></div>
+    <p class="mt-3 text-xs text-alum">Test account: admin / saintnorthgym2026</p>
+  </form>
+</section>
+
+<!-- ===== App ===== -->
+<div id="app" class="hidden">
+
+  <header class="sticky top-0 z-10 border-b-2 border-crimson bg-obsidian/95 px-3 pb-2 pt-2 backdrop-blur">
+    <div class="mx-auto flex max-w-5xl items-center gap-2">
+      <div class="min-w-0 flex-1">
+        <h1 class="font-display text-xl font-bold uppercase leading-none tracking-wider">Saint North <span class="text-crimson">Gym</span></h1>
+        <p id="who" class="truncate text-xs text-alum"></p>
+      </div>
+      <button id="logout-btn" type="button" class="btn btn-steel !min-h-[40px] !px-3 !text-sm">Logout</button>
+    </div>
+    <!-- Quick walk-in check-in, always one tap away -->
+    <div class="mx-auto mt-2 grid max-w-5xl grid-cols-2 gap-2">
+      <button class="btn !min-h-[44px]" data-walkin="Student" type="button">Walk-in Student · ₱80</button>
+      <button class="btn btn-steel !min-h-[44px]" data-walkin="Non-Student" type="button">Walk-in · ₱100</button>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-5xl px-3 pb-12 pt-3">
+    <div id="storage-warn"></div>
+
+    <!-- Metrics bar -->
+    <div class="mb-3 grid grid-cols-3 gap-2" aria-label="Today">
+      <div class="panel border-t-4 !border-t-crimson !p-3"><span class="text-[11px] font-bold uppercase tracking-widest text-alum">Revenue today</span><b id="m-rev" class="block font-display text-2xl leading-tight sm:text-4xl">₱0</b></div>
+      <div class="panel border-t-4 !border-t-crimson !p-3"><span class="text-[11px] font-bold uppercase tracking-widest text-alum">Check-ins</span><b id="m-in" class="block font-display text-2xl leading-tight sm:text-4xl">0</b></div>
+      <div class="panel border-t-4 !border-t-crimson !p-3"><span class="text-[11px] font-bold uppercase tracking-widest text-alum">Active monthly</span><b id="m-act" class="block font-display text-2xl leading-tight sm:text-4xl">0</b></div>
+    </div>
+
+    <div class="grid gap-3 lg:grid-cols-[1fr_320px]">
+      <!-- Members column -->
+      <section aria-label="Members">
+        <div class="flex gap-2">
+          <input id="search" class="field" type="search" placeholder="Search name, phone or ID" aria-label="Search members">
+          <button id="add-open" type="button" class="btn shrink-0">+ Add</button>
+        </div>
+        <div id="pills" class="mt-3 flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Filter members">
+          <button class="pill on" data-filter="all" type="button">All Members</button>
+          <button class="pill" data-filter="students" type="button">Students</button>
+          <button class="pill" data-filter="non" type="button">Non-Students</button>
+          <button class="pill" data-filter="expiring" type="button">Expiring Soon</button>
+          <button class="pill" data-filter="expired" type="button">Expired</button>
+        </div>
+        <div id="msg"></div>
+        <div id="list" class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2"></div>
+      </section>
+
+      <!-- Daily activity log -->
+      <aside class="panel h-fit" aria-label="Today's activity">
+        <h2 class="font-display text-lg font-bold uppercase tracking-wider">Today's activity</h2>
+        <ol id="log" class="mt-2 max-h-80 overflow-y-auto border-l-2 border-edge2 pl-3"></ol>
+      </aside>
+    </div>
+  </main>
+</div>
+
+<!-- ===== Registration modal ===== -->
+<dialog id="modal" class="m-auto w-[calc(100%-1.5rem)] max-w-md border border-edge2 bg-steel p-4 text-white">
+  <form id="add-form" novalidate>
+    <h2 class="font-display text-2xl font-bold uppercase tracking-wider">New member</h2>
+    <label class="label" for="f-name">Full name</label><input id="f-name" class="field" maxlength="60" required>
+    <label class="label" for="f-phone">Contact number</label><input id="f-phone" class="field" type="tel" inputmode="tel" placeholder="09171234567" required>
+    <label class="label" for="f-type">Type</label><select id="f-type" class="field"><option>Non-Student</option><option>Student</option></select>
+    <label class="label" for="f-plan">Plan</label><select id="f-plan" class="field"><option value="Monthly">Monthly Membership</option><option value="Daily">Daily Walk-in</option></select>
+    <label class="label" for="f-start">Start date</label><input id="f-start" class="field" type="date" required>
+    <p id="f-price" class="mt-3 border-l-4 border-crimson bg-obsidian p-3 font-display text-lg uppercase tracking-wide"></p>
+    <div id="add-msg"></div>
+    <div class="mt-4 grid grid-cols-2 gap-2">
+      <button type="button" id="add-cancel" class="btn btn-steel">Cancel</button>
+      <button type="submit" class="btn">Save member</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ===== Delete confirmation modal ===== -->
+<dialog id="del-modal" class="m-auto w-[calc(100%-1.5rem)] max-w-sm border border-red-500 bg-steel p-4 text-white">
+  <h2 class="font-display text-2xl font-bold uppercase tracking-wider text-red-400">Delete member?</h2>
+  <p id="del-text" class="my-3 text-alum"></p>
+  <div class="grid grid-cols-2 gap-2">
+    <button id="del-cancel" type="button" class="btn btn-steel">Cancel</button>
+    <button id="del-ok" type="button" class="btn">Delete</button>
+  </div>
+</dialog>
+
+<script>
+/* =========================================================
+   1. HELPERS
+   ========================================================= */
+const $ = id => document.getElementById(id);
+const show = (el, on) => el.classList.toggle('hidden', !on);
+const peso = n => '₱' + Number(n).toLocaleString('en-PH');
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad = n => String(n).padStart(2, '0');
+const iso = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;   // local date YYYY-MM-DD
+const today = () => iso(new Date());
+const dayOf = ts => iso(new Date(ts));                                                // local day of a timestamp
+const timeOf = ts => new Date(ts).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' });
+const parse = s => new Date(s + 'T00:00:00');
+const daysLeft = s => Math.round((parse(s) - parse(today())) / 864e5);
+const validDate = s => /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(parse(s));
+const nowTs = () => new Date().toISOString();
+function addDays(s, n) { const d = parse(s); d.setDate(d.getDate() + n); return iso(d); }
+
+const NOTICE = { ok: 'border-emerald-500', warn: 'border-amber-500', bad: 'border-red-500' };
+function notice(id, kind, html) {
+  $(id).innerHTML = html ? `<div role="status" class="my-3 border-l-4 bg-steel p-3 text-sm ${NOTICE[kind]}">${html}</div>` : '';
+}
+// Wrap async handlers so a storage failure shows a message instead of silently breaking
+const guard = fn => async (...a) => {
+  try { await fn(...a); } catch (e) { console.error(e); notice('msg', 'bad', 'Storage error. Reload the page and try again.'); }
+};
+
+/* =========================================================
+   2. PRICING (single source of truth)
+   ========================================================= */
+const PRICE = {
+  Daily:   { 'Student': 80,  'Non-Student': 100  },    // per session, Student ID required for ₱80
+  Monthly: { 'Student': 800, 'Non-Student': 1000 }     // per 30 days
+};
+const MONTH_DAYS = 30;
+
+/* =========================================================
+   3. DATABASE LAYER (IndexedDB, with in-memory fallback)
+   The app only uses DB.getAll / DB.get / DB.write, so the engine can be swapped later.
+   Stores: members, checkins, transactions, meta (counters)
+   ========================================================= */
+const DB = (() => {
+  const NAME = 'saint_north_gym', VERSION = 1;
+  let opening, memory = null;                        // memory != null means fallback mode
+
+  // Minimal stand-in with the same calls we use on a real IndexedDB store
+  class MemStore {
+    constructor(key, auto) { this.key = key; this.auto = auto; this.rows = new Map(); this.n = 0; }
+    put(v) { this.rows.set(v[this.key], v); }
+    add(v) { if (this.auto) v[this.key] = ++this.n; this.put(v); }
+    delete(k) { this.rows.delete(k); }
+    get(k) { return { result: this.rows.get(k) }; }
+    getAll() { return { result: [...this.rows.values()] }; }
+  }
+
+  function open() {
+    return opening ||= new Promise(resolve => {
+      const useMemory = () => {
+        memory = { members: new MemStore('id'), checkins: new MemStore('id', true),
+                   transactions: new MemStore('id', true), meta: new MemStore('key') };
+        resolve(null);
+      };
+      if (!window.indexedDB) return useMemory();
+      const req = indexedDB.open(NAME, VERSION);
+      req.onupgradeneeded = () => {                  // runs once: creates the tables
+        const d = req.result;
+        d.createObjectStore('members', { keyPath: 'id' });
+        d.createObjectStore('checkins', { keyPath: 'id', autoIncrement: true });
+        d.createObjectStore('transactions', { keyPath: 'id', autoIncrement: true });
+        d.createObjectStore('meta', { keyPath: 'key' });
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = req.onblocked = useMemory;
+    });
+  }
+
+  // One transaction: every write inside fn is all-or-nothing
+  async function tx(stores, mode, fn) {
+    const d = await open();
+    if (!d) return fn(name => memory[name]).result ?? undefined;   // fallback path
+    return new Promise((resolve, reject) => {
+      const t = d.transaction(stores, mode);
+      let out;
+      try { out = fn(name => t.objectStore(name)); } catch (e) { t.abort(); return reject(e); }
+      t.oncomplete = () => resolve(out && 'result' in out ? out.result : undefined);
+      t.onerror = t.onabort = () => reject(t.error || new Error('Transaction aborted'));
+    });
+  }
+  return {
+    getAll: name => tx(name, 'readonly', s => s(name).getAll()),
+    get: (name, key) => tx(name, 'readonly', s => s(name).get(key)),
+    write: (stores, fn) => tx(stores, 'readwrite', fn),
+    isFallback: async () => { await open(); return !!memory; }
+  };
+})();
+
+/* =========================================================
+   4. DOMAIN LOGIC
+   ========================================================= */
+const S = { members: [], checkins: [], transactions: [] };   // in-memory copy, reloaded after each write
+let filter = 'all';
+
+async function load() {
+  [S.members, S.checkins, S.transactions] = await Promise.all(['members', 'checkins', 'transactions'].map(DB.getAll));
+}
+const isMonthly = m => m.plan === 'Monthly';
+const getMember = id => S.members.find(m => m.id === id);
+const checkedInToday = id => S.checkins.some(c => c.memberId === id && dayOf(c.timestamp) === today());
+
+// Status is computed from the expiry date every time, then saved onto the record when it is written
+function statusOf(m) {
+  if (!isMonthly(m)) return { key: 'WALK-IN', css: 'bg-edge2 text-alum', bar: 'border-l-edge2' };
+  const d = daysLeft(m.expiryDate);
+  if (d < 0)  return { key: 'EXPIRED',       css: 'bg-red-500/15 text-red-400 ring-1 ring-red-500/60',       bar: 'border-l-red-500' };
+  if (d <= 5) return { key: 'EXPIRING SOON', css: 'bg-amber-500/15 text-amber-400 ring-1 ring-amber-500/60', bar: 'border-l-amber-500' };
+  return        { key: 'ACTIVE',        css: 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/60', bar: 'border-l-emerald-500' };
+}
+const stamp = m => ({ ...m, status: statusOf(m).key });      // keeps the stored status field current
+
+async function nextId() {
+  const m = (await DB.get('meta', 'seq')) || { key: 'seq', value: 0 };
+  m.value += 1;
+  await DB.write('meta', s => s('meta').put(m));
+  return `SNG-${new Date().getFullYear()}-${String(m.value).padStart(3, '0')}`;
+}
+const txRow = (memberId, amount, description) => ({ memberId, amount, description, timestamp: nowTs() });
+
+/* =========================================================
+   5. AUTH (browser-only: fine for testing, not real security)
+   ========================================================= */
+const SESSION_KEY = 'sng_session', SESSION_HOURS = 8, USER = 'admin';
+const PASS_HASH = '5eb32f8cd2789a96c90db3a65cc734846a7eab29e2c01f1b42531f76dc86bb34';   // SHA-256 of the password
+
+async function sha256(text) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+function session() {
+  try { const s = JSON.parse(localStorage.getItem(SESSION_KEY)); return s && s.expires > Date.now() ? s : null; }
+  catch (e) { return null; }
+}
+$('login-form').onsubmit = async e => {
+  e.preventDefault();
+  if (!window.crypto || !crypto.subtle) return notice('login-msg', 'bad', 'Secure hashing unavailable. Open this page via http://localhost or https.');
+  const ok = $('u').value.trim() === USER && (await sha256($('p').value)) === PASS_HASH;
+  if (!ok) return notice('login-msg', 'bad', 'Incorrect username or password.');
+  localStorage.setItem(SESSION_KEY, JSON.stringify({ user: USER, expires: Date.now() + SESSION_HOURS * 36e5 }));
+  $('p').value = ''; notice('login-msg', 'ok', '');
+  showScreen();
+};
+$('logout-btn').onclick = () => { localStorage.removeItem(SESSION_KEY); showScreen(); };
+
+async function showScreen() {
+  const s = session();
+  show($('login'), !s); show($('app'), !!s);
+  if (!s) return;
+  $('who').textContent = `Signed in as ${s.user} · Calios, Santa Cruz, Laguna`;
+  $('storage-warn').innerHTML = (await DB.isFallback())
+    ? '<div class="mb-3 border-l-4 border-amber-500 bg-steel p-3 text-sm">Browser storage is unavailable. Data will be lost when this page closes.</div>' : '';
+  await guard(load)(); render();
+}
+
+/* =========================================================
+   6. SEED DATA (first run only)
+   ========================================================= */
+async function seed() {
+  if (await DB.get('meta', 'seeded')) return;
+  const t = today();
+  const sample = [   // name, phone, type, plan, startOffset, expiryOffset
+    ['Maria Santos',   '09171234501', 'Student',     'Monthly', -12,  18],   // active student
+    ['Juan Dela Cruz', '09171234502', 'Non-Student', 'Monthly', -27,   3],   // expiring soon
+    ['Pedro Reyes',    '09171234503', 'Non-Student', 'Monthly', -42, -12],   // overdue
+    ['Ana Bautista',   '09171234504', 'Student',     'Monthly', -34,  -4]    // overdue student
+  ];
+  const members = [];
+  for (const [fullName, phone, memberType, plan, a, b] of sample) {
+    members.push(stamp({ id: await nextId(), fullName, phone, memberType, plan, startDate: addDays(t, a), expiryDate: addDays(t, b), totalVisits: 0 }));
+  }
+  await DB.write(['members', 'meta'], s => {
+    members.forEach(m => s('members').put(m));
+    s('meta').put({ key: 'seeded', value: true });
+  });
+}
+
+/* =========================================================
+   7. ACTIONS
+   ========================================================= */
+// --- Registration modal with live price ---
+function updatePrice() {
+  const plan = $('f-plan').value, type = $('f-type').value, p = PRICE[plan][type];
+  $('f-price').textContent = plan === 'Monthly' ? `Amount due now: ${peso(p)} / month` : `Pay at check-in: ${peso(p)} / session`;
+}
+['f-plan', 'f-type'].forEach(id => $(id).onchange = updatePrice);
+$('add-open').onclick = () => { $('add-form').reset(); $('f-start').value = today(); updatePrice(); notice('add-msg', 'ok', ''); $('modal').showModal(); };
+$('add-cancel').onclick = () => $('modal').close();
+
+$('add-form').onsubmit = guard(async e => {
+  e.preventDefault();
+  const fullName = $('f-name').value.trim(), phone = $('f-phone').value.replace(/[\s-]/g, '');
+  const memberType = $('f-type').value, plan = $('f-plan').value, startDate = $('f-start').value;
+  const errors = [];
+  if (fullName.length < 2 || fullName.length > 60) errors.push('Name must be 2 to 60 characters.');
+  if (!/^(09\d{9}|\+639\d{9})$/.test(phone)) errors.push('Phone must look like 09171234567 or +639171234567.');
+  if (!validDate(startDate)) errors.push('Enter a valid start date.');
+  if (S.members.some(m => m.phone === phone)) errors.push('This phone number is already registered.');
+  if (errors.length) return notice('add-msg', 'bad', errors.map(esc).join('<br>'));
+
+  const price = PRICE[plan][memberType];
+  const m = stamp({ id: await nextId(), fullName, phone, memberType, plan, startDate,
+                    expiryDate: plan === 'Monthly' ? addDays(startDate, MONTH_DAYS) : startDate, totalVisits: 0 });
+  await DB.write(['members', 'transactions'], s => {
+    s('members').put(m);
+    if (isMonthly(m)) s('transactions').add(txRow(m.id, price, `Monthly registration (${memberType})`));
+  });
+  $('modal').close();
+  notice('msg', 'ok', `Registered <b>${esc(fullName)}</b> (${m.id}).` + (isMonthly(m) ? ` Collect ${peso(price)}.` : ` Fee ${peso(price)} is collected at each check-in.`));
+  await load(); render();
+});
+
+// --- Quick walk-in (no registration) ---
+document.querySelectorAll('[data-walkin]').forEach(b => b.onclick = guard(async () => {
+  const type = b.dataset.walkin, fee = PRICE.Daily[type];
+  await DB.write(['checkins', 'transactions'], s => {
+    s('checkins').add({ memberId: null, memberName: `Walk-in (${type})`, type: 'Walk-in', amountPaid: fee, timestamp: nowTs() });
+    s('transactions').add(txRow(null, fee, `Walk-in (${type})`));
+  });
+  notice('msg', 'ok', `Walk-in logged. Collect ${peso(fee)}.` + (type === 'Student' ? ' Verify Student ID.' : ''));
+  await load(); render();
+}));
+
+// --- Member card actions ---
+let pendingDelete = null;
+const actions = {
+  async checkin(id) {
+    const m = getMember(id);
+    if (checkedInToday(id)) return notice('msg', 'warn', `${esc(m.fullName)} is already checked in today.`);
+    if (isMonthly(m) && daysLeft(m.expiryDate) < 0) return notice('msg', 'bad', `${esc(m.fullName)}'s membership expired on ${m.expiryDate}. Renew first.`);
+    const fee = isMonthly(m) ? 0 : PRICE.Daily[m.memberType];
+    const updated = stamp({ ...m, totalVisits: (m.totalVisits || 0) + 1 });
+    await DB.write(['members', 'checkins', 'transactions'], s => {
+      s('members').put(updated);
+      s('checkins').add({ memberId: id, memberName: m.fullName, type: isMonthly(m) ? 'Monthly' : 'Walk-in', amountPaid: fee, timestamp: nowTs() });
+      if (fee) s('transactions').add(txRow(id, fee, `Walk-in (${m.memberType})`));
+    });
+    notice('msg', 'ok', fee
+      ? `<b>${esc(m.fullName)}</b> checked in. Collect ${peso(fee)}${m.memberType === 'Student' ? '. Verify Student ID.' : '.'}`
+      : `<b>${esc(m.fullName)}</b> checked in (monthly member).`);
+  },
+  async renew(id) {
+    const m = getMember(id), price = PRICE.Monthly[m.memberType];
+    const base = isMonthly(m) && daysLeft(m.expiryDate) >= 0 ? m.expiryDate : today();   // extend, don't lose days
+    const updated = stamp({ ...m, plan: 'Monthly', expiryDate: addDays(base, MONTH_DAYS) });
+    await DB.write(['members', 'transactions'], s => {
+      s('members').put(updated);
+      s('transactions').add(txRow(id, price, `Monthly renewal (${m.memberType})`));
+    });
+    notice('msg', 'ok', `Renewed <b>${esc(m.fullName)}</b> until ${updated.expiryDate}. Collect ${peso(price)}.`);
+  },
+  del(id) {                                            // opens the confirmation modal; deletion happens on OK
+    const m = getMember(id);
+    pendingDelete = id;
+    $('del-text').textContent = `${m.fullName} (${m.id}) will be removed permanently. Payment history is kept.`;
+    $('del-modal').showModal();
+  }
+};
+$('list').onclick = guard(async e => {
+  const b = e.target.closest('button[data-act]');
+  if (!b) return;
+  await actions[b.dataset.act](b.dataset.id);
+  await load(); render();
+});
+$('del-cancel').onclick = () => { pendingDelete = null; $('del-modal').close(); };
+$('del-ok').onclick = guard(async () => {
+  const m = getMember(pendingDelete);
+  await DB.write('members', s => s('members').delete(pendingDelete));
+  $('del-modal').close(); pendingDelete = null;
+  notice('msg', 'ok', `Deleted ${esc(m.fullName)}.`);
+  await load(); render();
+});
+
+// --- Search + filter pills ---
+$('search').oninput = renderList;
+$('pills').onclick = e => {
+  const b = e.target.closest('[data-filter]');
+  if (!b) return;
+  filter = b.dataset.filter;
+  document.querySelectorAll('.pill').forEach(p => p.classList.toggle('on', p === b));
+  renderList();
+};
+
+/* =========================================================
+   8. RENDERING
+   ========================================================= */
+function renderMetrics() {
+  const t = today();
+  $('m-rev').textContent = peso(S.transactions.filter(x => dayOf(x.timestamp) === t).reduce((a, x) => a + x.amount, 0));
+  $('m-in').textContent = S.checkins.filter(c => dayOf(c.timestamp) === t).length;
+  $('m-act').textContent = S.members.filter(m => isMonthly(m) && daysLeft(m.expiryDate) >= 0).length;
+}
+
+const FILTERS = {
+  all: () => true,
+  students: m => m.memberType === 'Student',
+  non: m => m.memberType === 'Non-Student',
+  expiring: m => statusOf(m).key === 'EXPIRING SOON',
+  expired: m => statusOf(m).key === 'EXPIRED'
+};
+
+function renderList() {
+  const q = $('search').value.trim().toLowerCase();
+  const rows = S.members.filter(m => FILTERS[filter](m) &&
+    (!q || m.fullName.toLowerCase().includes(q) || m.id.toLowerCase().includes(q) || m.phone.includes(q.replace(/[\s-]/g, ''))));
+  if (!rows.length) { $('list').innerHTML = '<p class="col-span-full py-8 text-center text-alum">No members found.</p>'; return; }
+  $('list').innerHTML = rows.map(m => {
+    const st = statusOf(m), done = checkedInToday(m.id);
+    const price = isMonthly(m) ? `${peso(PRICE.Monthly[m.memberType])}/mo` : `${peso(PRICE.Daily[m.memberType])}/visit`;
+    return `<article class="panel border-l-4 !p-3 ${st.bar}">
+      <div class="flex items-start justify-between gap-2">
+        <h3 class="break-words font-display text-lg font-bold uppercase leading-tight tracking-wide">${esc(m.fullName)}</h3>
+        <span class="badge ${st.css}">${st.key}</span>
+      </div>
+      <p class="mb-2 mt-1 break-all text-xs text-alum">${esc(m.id)} · ${esc(m.phone)}</p>
+      <p class="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-sm"><span>${m.memberType}</span><span>${isMonthly(m) ? 'Monthly' : 'Daily'} · ${price}</span>
+        <span>${isMonthly(m) ? 'Until ' + m.expiryDate : ''}</span><span class="text-alum">${m.totalVisits || 0} visits</span></p>
+      <div class="grid grid-cols-[1fr_auto_auto] gap-2">
+        <button class="btn" data-act="checkin" data-id="${m.id}" ${done ? 'disabled' : ''}>${done ? 'Checked in' : 'Check in'}</button>
+        <button class="btn btn-steel" data-act="renew" data-id="${m.id}" aria-label="Renew ${esc(m.fullName)}">Renew</button>
+        <button class="btn btn-danger" data-act="del" data-id="${m.id}" aria-label="Delete ${esc(m.fullName)}">Delete</button>
+      </div></article>`;
+  }).join('');
+}
+
+// Timeline of today: check-ins plus membership payments (walk-in fees already show on their check-in line)
+function renderLog() {
+  const t = today();
+  const items = [
+    ...S.checkins.filter(c => dayOf(c.timestamp) === t).map(c => ({ ts: c.timestamp,
+      text: `<b>${esc(c.memberName)}</b> checked in`, amt: c.amountPaid ? peso(c.amountPaid) : 'Monthly' })),
+    ...S.transactions.filter(x => dayOf(x.timestamp) === t && !x.description.startsWith('Walk-in')).map(x => ({ ts: x.timestamp,
+      text: esc(x.description), amt: peso(x.amount) }))
+  ].sort((a, b) => b.ts.localeCompare(a.ts));
+  $('log').innerHTML = items.length
+    ? items.map(i => `<li class="relative pb-3 text-sm"><span class="absolute -left-[17px] top-1.5 h-2 w-2 bg-crimson"></span>
+        <span class="text-xs text-alum">${timeOf(i.ts)}</span><br>${i.text} <span class="font-bold text-crimson">· ${i.amt}</span></li>`).join('')
+    : '<li class="text-sm text-alum">No activity yet today.</li>';
+}
+function render() { renderMetrics(); renderList(); renderLog(); }
+
+/* =========================================================
+   9. START
+   ========================================================= */
+(async () => {
+  try { await seed(); } catch (e) { console.error(e); }
+  showScreen();
+})();
+</script>
+</body>
+</html>
